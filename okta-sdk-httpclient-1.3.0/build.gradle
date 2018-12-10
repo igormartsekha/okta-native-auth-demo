@@ -1,0 +1,2 @@
+configurations.maybeCreate("default")
+artifacts.add("default", file('okta-sdk-httpclient-1.3.0.jar'))

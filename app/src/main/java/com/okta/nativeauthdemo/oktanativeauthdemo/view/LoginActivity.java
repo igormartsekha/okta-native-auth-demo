@@ -24,13 +24,20 @@ import android.widget.Toast;
 
 import com.okta.appauth.android.OAuthClientConfiguration;
 import com.okta.appauth.android.OktaAppAuth;
+import com.okta.authn.sdk.AuthenticationStateHandlerAdapter;
+import com.okta.authn.sdk.client.AuthenticationClient;
+import com.okta.authn.sdk.client.AuthenticationClients;
+import com.okta.authn.sdk.resource.AuthenticationResponse;
 import com.okta.nativeauthdemo.oktanativeauthdemo.R;
 import com.okta.nativeauthdemo.oktanativeauthdemo.di.ServiceLocator;
 import com.okta.nativeauthdemo.oktanativeauthdemo.legacy.CustomOktaAppAuth;
 
 import net.openid.appauth.AuthorizationException;
 
+import io.reactivex.Single;
+import io.reactivex.SingleEmitter;
 import io.reactivex.SingleObserver;
+import io.reactivex.SingleOnSubscribe;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.disposables.Disposable;
@@ -48,6 +55,10 @@ public class LoginActivity extends AppCompatActivity {
     private View mProgressView;
     private View mLoginFormView;
     private CustomOktaAppAuth oktaAppAuth;
+    private boolean useOktaNativeSdk = true;
+
+    private final String USERNAME = "";
+    private final String PASSWORD = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,10 +90,15 @@ public class LoginActivity extends AppCompatActivity {
         mLoginFormView = findViewById(R.id.login_form);
         mProgressView = findViewById(R.id.login_progress);
 
+        mEmailView.setText(USERNAME);
+        mPasswordView.setText(PASSWORD);
+
 
         // Init configuration from json file in raw folder
-        this.oktaAppAuth = ServiceLocator.getInstance().getCustomOktaAppAuth(this);
-        initializeOktaAuth();
+        if(!useOktaNativeSdk) {
+            this.oktaAppAuth = ServiceLocator.getInstance().getCustomOktaAppAuth(this);
+            initializeOktaAuth();
+        }
     }
 
     private void initializeOktaAuth() {
@@ -155,8 +171,77 @@ public class LoginActivity extends AppCompatActivity {
             // form field with an error.
             focusView.requestFocus();
         } else {
-            processAuthentication(email, password);
+            if(useOktaNativeSdk) {
+                processAuthenticationNativeOkta(email, password);
+            } else {
+                processAuthentication(email, password);
+            }
+
         }
+    }
+
+    private void processAuthenticationNativeOkta(final String email, final String password) {
+//        showProgress(true);
+
+//        try {
+//            AuthenticationClient client = AuthenticationClients.builder()
+//                    .setOrgUrl("https://lohika-um.oktapreview.com")
+//                    .build();
+//
+//            client.authenticate(email, password.toCharArray(), null, new AuthenticationStateHandlerAdapter() {
+//                @Override
+//                public void handleUnknown(AuthenticationResponse unknownResponse) {
+////                    emitter.onSuccess(false);
+//                }
+//
+//                @Override
+//                public void handleSuccess(AuthenticationResponse successResponse) {
+//                    String token = successResponse.getSessionToken();
+////                    emitter.onSuccess(true);
+//                }
+//            });
+//        }catch (Exception e) {
+//            e.printStackTrace();
+//        }
+
+        Single.create(new SingleOnSubscribe<Boolean>() {
+            @Override
+            public void subscribe(final SingleEmitter<Boolean> emitter) throws Exception {
+                try {
+                    AuthenticationClient client = AuthenticationClients.builder()
+                            .setOrgUrl("https://lohika-um.oktapreview.com")
+                            .build();
+
+                    client.authenticate(email, password.toCharArray(), null, new AuthenticationStateHandlerAdapter() {
+                        @Override
+                        public void handleUnknown(AuthenticationResponse unknownResponse) {
+                            emitter.onSuccess(false);
+                        }
+
+                        @Override
+                        public void handleSuccess(AuthenticationResponse successResponse) {
+                            String token = successResponse.getSessionToken();
+                            emitter.onSuccess(true);
+                        }
+                    });
+                }catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Consumer<Boolean>() {
+                    @Override
+                    public void accept(Boolean aBoolean) throws Exception {
+
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+
+                    }
+                });
     }
 
     private void processAuthentication(String login, String password) {
